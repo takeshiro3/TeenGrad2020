@@ -1,0 +1,72 @@
+#include <Wire.h>
+#include <EasyTransferI2C.h>
+EasyTransferI2C ET;
+
+#define address 6
+#define consumers 5
+#define minPover 0.2
+#define maxPover analogRead(A0)*0.032
+#define keyPort 3
+
+float power = 0;
+struct SENDATA {
+  byte sendTo;
+  float power;
+}; SENDATA sdata;
+
+void setup() {
+  pinMode(keyPort, OUTPUT);
+  Serial.begin(9600);
+  ET.begin(details(sdata), &Wire);
+  Wire.onReceive(receive);
+}
+
+void loop() {
+  Wire.begin(address);
+  if (address > consumers) scanner();
+  else if (ET.receiveData())
+    if (sdata.power != 0)digitalWrite(keyPort, 1);
+    else digitalWrite(keyPort, 0);
+}
+
+void scanner() {
+  sdata.power = maxPover;
+  for (byte id = 0; id < 10; id ++ ) {
+    Wire.beginTransmission(id);
+    if (Wire.endTransmission() == 0) {
+      Serial.print("I2C user ");
+      Serial.print(id, HEX);
+      Serial.print(": ");
+      if (sdata.power - getPower(id) > minPover)Serial.println (getPower(id));
+      else Serial.println (0);
+      int i = id + 1;
+      Wire.beginTransmission(i);
+      while (Wire.endTransmission() != 0) {
+        i++;
+        Wire.beginTransmission(i);
+      }
+      if (sdata.power > 0)power = sdata.power;
+      sdata.sendTo = i;
+      if (sdata.power - getPower(id) > minPover) sdata.power = sdata.power - getPower(id);
+      else sdata.power = 0;
+      ET.sendData(id);
+    }
+
+
+  }
+  Serial.print ("rest: ");
+  Serial.println(power);
+  Serial.println("done\n");
+}
+float getPower(int id) {
+  switch (id) {
+    case 1: return 0.40;
+    case 2: return 4.00;
+    case 3: return 0.60;
+    case 4: return 22.0;
+    case 5: return 5.00;
+    case 6: return 0;
+    case 7: return 0;
+  }
+}
+void receive(int numBytes) {}
